@@ -74,18 +74,16 @@ vector<vector<Client*>> build_graph() {
 
 vector<Client*> get_independent_set(const vector<vector<Client*>> &g) {
     vector<Client*> ans = vector<Client*>();
-    vector<int> nodes = vector<int>(clients.size());
-    iota(nodes.begin(), nodes.end(), 0);
-    vector<int>::iterator random_node;
+    unordered_set<int> nodes = unordered_set<int>(clients.size());
+    for (int i = 0; i < (int)clients.size(); ++i) nodes.insert(i);
 
     while (!nodes.empty()) {
-        random_node = nodes.begin();
-        advance(random_node, rand() % nodes.size());
-        ans.push_back(&clients[*random_node]);
-        for (Client *c : g[*random_node]) {
-            nodes.erase(nodes.begin() + c->get_id());
+        auto it = next(nodes.begin(), rand() % nodes.size());
+        ans.push_back(&clients[*it]);
+        for (Client *c : g[*it]) {
+            nodes.erase(c->get_id());
         }
-        nodes.erase(random_node);
+        nodes.erase(*it);
     }
 
     return ans;
