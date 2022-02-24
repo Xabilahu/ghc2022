@@ -1,4 +1,4 @@
-CPPFLAGS = -Wall -Wextra -std=c++17 -pedantic -pipe -lm -g -D_LOCAL
+CPPFLAGS = -Wall -Wextra -std=c++17 -pedantic -pipe -lm -O3 -D_LOCAL
 EXEC_NAME = solution
 
 .PHONY: all

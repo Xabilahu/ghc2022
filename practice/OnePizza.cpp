@@ -37,8 +37,10 @@ public:
 };
 
 vector<Client> clients;
+vector<vector<Client*>> graph;
 unordered_map<string, int> ing2id;
 vector<string> id2ing = vector<string>();
+mt19937 rng;
 int ing_idx = 0;
 
 unordered_set<int> read_input(int field_count) {
@@ -72,15 +74,15 @@ vector<vector<Client*>> build_graph() {
     return g;
 }
 
-vector<Client*> get_independent_set(const vector<vector<Client*>> &g) {
-    vector<Client*> ans = vector<Client*>();
+unordered_set<int> get_random_independent_set() {
+    unordered_set<int> ans = unordered_set<int>();
     unordered_set<int> nodes = unordered_set<int>(clients.size());
     for (int i = 0; i < (int)clients.size(); ++i) nodes.insert(i);
 
     while (!nodes.empty()) {
-        auto it = next(nodes.begin(), rand() % nodes.size());
-        ans.push_back(&clients[*it]);
-        for (Client *c : g[*it]) {
+        auto it = next(nodes.begin(), rng() % nodes.size());
+        ans.insert(clients[*it].get_id());
+        for (Client *c : graph[*it]) {
             nodes.erase(c->get_id());
         }
         nodes.erase(*it);
@@ -89,13 +91,28 @@ vector<Client*> get_independent_set(const vector<vector<Client*>> &g) {
     return ans;
 }
 
-unordered_set<int> solve() {
-  unordered_set<int> pizza;
-  vector<vector<Client*>> graph = build_graph();
+void update_randomly_independent_set(unordered_set<int> &ans) {
+    unordered_set<int> nodes = unordered_set<int>(clients.size());
+    for (int i = 0; i < (int)clients.size(); ++i) nodes.insert(i);
+    for (int i : ans) {
+        nodes.erase(i);
+        for (Client *c : graph[i]) nodes.erase(c->get_id());
+    }
 
-  vector<Client*> independent_set = get_independent_set(graph);
-  for (Client *c : independent_set) {
-      for (int ing : c->get_likes()) pizza.insert(ing);
+    while (!nodes.empty()) {
+        auto it = next(nodes.begin(), rng() % nodes.size());
+        ans.insert(clients[*it].get_id());
+        for (Client *c : graph[*it]) {
+            nodes.erase(c->get_id());
+        }
+        nodes.erase(*it);
+    }
+}
+
+unordered_set<int> make_pizza(const unordered_set<int> &independent_set) {
+  unordered_set<int> pizza;
+  for (int id : independent_set) {
+      for (int ing : clients[id].get_likes()) pizza.insert(ing);
   }
 
   return pizza;
@@ -126,6 +143,33 @@ int compute_score(const unordered_set<int> &pizza) {
   return score;
 }
 
+unordered_set<int> refine_solution(unordered_set<int> &solution, int iters) {
+    unordered_set<int> best_solution = unordered_set<int>(solution);
+    unordered_set<int> c_solution, eliminated;
+    uniform_int_distribution<> d(25,50);
+    int c_score, best_score = compute_score(make_pizza(best_solution));
+    cerr << "First score: " << best_score << endl;
+    long long p;
+
+    for (int i = 0; i < iters; ++i) {
+        // Delete d(rng)% of nodes from best solution
+        p = llround(d(rng) * best_solution.size() / 100);
+        sample(best_solution.begin(), best_solution.end(), inserter(eliminated, eliminated.begin()), p, rng);
+        c_solution = unordered_set<int>(best_solution);
+        for (int id : eliminated) c_solution.erase(id);
+        update_randomly_independent_set(c_solution);
+        c_score = compute_score(make_pizza(c_solution));
+        if (c_score > best_score) {
+            cerr << "[Increase: " << c_score - best_score << "]" << endl;
+            best_score = c_score;
+            best_solution = c_solution;
+        }
+        eliminated.clear();
+    }
+
+    return best_solution;
+}
+
 void output_solution(const unordered_set<int> &solution) {
   cout << solution.size();
   for (int ing : solution) {
@@ -135,13 +179,17 @@ void output_solution(const unordered_set<int> &solution) {
 }
 
 int main(int argc, char **argv) {
+  int iters = 1000;
+
 #ifdef _LOCAL
-  if (argc < 3) {
-    cerr << "Usage: " << argv[0] << " <FILENAME> <NUMERIC SEED>" << endl;
+  if (argc != 4) {
+    cerr << "Usage: " << argv[0] << " <FILENAME> <ITERS> <NUMERIC SEED>" << endl;
     return 1;
   }
   freopen(argv[1], "r", stdin);
-  srand(stoi(argv[2]));
+  rng = mt19937{random_device{}()};
+  rng.seed(stoi(argv[3]));
+  iters = stoi(argv[2]);
 #endif
 
   ios::sync_with_stdio(0);
@@ -164,9 +212,14 @@ int main(int argc, char **argv) {
     clients[client_idx].set_dislikes(read_input(elem_amount));
   }
 
-  unordered_set<int> solution = solve();
-  output_solution(solution);
-  cerr << "Score: " << compute_score(solution) << endl;
+  graph = build_graph();
+  unordered_set<int> solution = get_random_independent_set();
+
+  solution = refine_solution(solution, iters);
+
+  unordered_set<int> pizza = make_pizza(solution);
+  output_solution(pizza);
+  cerr << "Score: " << compute_score(pizza) << endl;
 
   return 0;
 }
